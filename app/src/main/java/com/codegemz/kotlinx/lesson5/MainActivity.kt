@@ -3,45 +3,51 @@ package com.codegemz.kotlinx.lesson5
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import kotlinx.serialization.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonConfiguration
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk27.coroutines.onClick
 
 class MainActivity : AppCompatActivity() {
+    private val sharedPrefs by lazy {
+        getSharedPreferences("main", Context.MODE_PRIVATE)
+    }
+    private val json by lazy {
+        Json(JsonConfiguration.Stable)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         MainView().setContentView(this)
     }
 
-    // save fo shared preferences
-    fun setNotesToPrefs(text: String) {
-        val sharedPrefs = this.getSharedPreferences("lesson5", Context.MODE_PRIVATE)
+    // save noteItemList to shared preferences
+    internal fun setNotesToPrefs(noteItemList: List<TextListItem>) {
+        val noteString = json.stringify(TextListItem.serializer().list, noteItemList)
         with (sharedPrefs.edit()) {
-            putString("notes", text)
+            putString("notes", noteString)
             apply()
         }
     }
 
     // read from shared preferences
-    fun getNotesFromPrefs(): String {
-        val sharedPrefs = this.getSharedPreferences("lesson5", Context.MODE_PRIVATE)
-        val noteString = sharedPrefs.getString("notes", "")
+    private fun getNoteStringFromPrefs(): String {
+        val noteString = sharedPrefs.getString("notes", "[]")
         noteString?.let {
             return noteString
         }
-        return ""
+        return "[]"
     }
 
-    // get note list from pref string
-    internal fun getNoteItemList(): List<NoteItem> {
-        val noteList = getNotesFromPrefs().split(";")
-        return noteList.map {
-            NoteItem(it)
-        }
+    // get note list from serialized pref string
+    internal fun getNoteItemList(): List<TextListItem> {
+        val noteString = getNoteStringFromPrefs()
+        return json.parse(TextListItem.serializer().list, noteString)
     }
 }
 
@@ -84,7 +90,7 @@ class MainView : AnkoComponent<MainActivity> {
                         text = resources.getString(R.string.clear_all)
                         onClick {
                             notesAdapter.clear()
-                            owner.setNotesToPrefs("")
+                            owner.setNotesToPrefs(emptyList())
                         }
                     }.lparams(weight = 1F)
                     button {
@@ -93,8 +99,10 @@ class MainView : AnkoComponent<MainActivity> {
                             val enteredText = inputEditText.text.toString()
                             if (enteredText.isNotBlank()) {
                                 inputEditText.setText("")
-                                notesAdapter.add(NoteItem(enteredText))
-                                owner.setNotesToPrefs(owner.getNotesFromPrefs() + enteredText)
+                                notesAdapter.add(TextListItem(enteredText))
+                                val noteItemList = owner.getNoteItemList().toMutableList()
+                                noteItemList.add(TextListItem(enteredText))
+                                owner.setNotesToPrefs(noteItemList)
                             }
                         }
                     }.lparams(weight = 1F)
@@ -114,7 +122,7 @@ class MainView : AnkoComponent<MainActivity> {
 
 internal class NotesAdapter(ctx: Context, items: List<ListItem>) : ListItemAdapter(ctx, items) {
     // All ListItem implementations
-    override val listItemClasses = listOf(NoteItem::class.java)
+    override val listItemClasses = listOf(TextListItem::class.java)
 }
 
 // Default implementation
