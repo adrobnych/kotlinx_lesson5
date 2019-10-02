@@ -5,11 +5,12 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import kotlinx.serialization.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonConfiguration
+import kotlinx.serialization.list
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk27.coroutines.onClick
 
@@ -27,8 +28,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     // save noteItemList to shared preferences
-    internal fun setNotesToPrefs(noteItemList: List<TextListItem>) {
-        val noteString = json.stringify(TextListItem.serializer().list, noteItemList)
+    internal fun setNotesToPrefs(noteItemList : MutableList<NoteEntity>) {
+        val noteString = json.stringify(NoteEntity.serializer().list, noteItemList)
         with (sharedPrefs.edit()) {
             putString("notes", noteString)
             apply()
@@ -36,28 +37,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     // read from shared preferences
-    private fun getNoteStringFromPrefs(): String {
-        val noteString = sharedPrefs.getString("notes", "[]")
-        noteString?.let {
-            return noteString
-        }
-        return "[]"
+    private fun getNoteStringFromPrefs() : String {
+        return sharedPrefs.getString("notes", "[]").orEmpty()
     }
 
     // get note list from serialized pref string
-    internal fun getNoteItemList(): List<TextListItem> {
+    internal fun getNoteItemList() : MutableList<NoteEntity> {
         val noteString = getNoteStringFromPrefs()
-        return json.parse(TextListItem.serializer().list, noteString)
+        return json.parse(NoteEntity.serializer().list, noteString).toMutableList()
     }
 }
 
 class MainView : AnkoComponent<MainActivity> {
     override fun createView(ui: AnkoContext<MainActivity>) = with(ui) {
-        relativeLayout {
-            val notesAdapter = NotesAdapter(ctx, owner.getNoteItemList())
+        val notesAdapter = MyAdapter(owner, owner.getNoteItemList())
 
+        relativeLayout {
             textView {
-                // ids can be created in res/values/ids.xml
+                // id's can be created in res/values/ids.xml
                 id = R.id.noteTitle
                 text = resources.getString(R.string.notes)
                 textSize = 24f
@@ -65,6 +62,17 @@ class MainView : AnkoComponent<MainActivity> {
             }.lparams(width = wrapContent) {
                 topMargin = dip(25)
                 centerHorizontally()
+            }
+
+            checkBox(R.string.filter) {
+                onClick {
+                    // function call
+                }
+                visibility = View.GONE
+            }.lparams {
+                topMargin = dip(25)
+                rightMargin = dip (25)
+                alignParentRight()
             }
 
             listView {
@@ -81,7 +89,7 @@ class MainView : AnkoComponent<MainActivity> {
                 padding = dip(5)
 
                 val inputEditText = editText {
-                    hint = "Enter note"
+                    hint = resources.getString(R.string.enter_note)
                 }
 
                 linearLayout {
@@ -90,7 +98,6 @@ class MainView : AnkoComponent<MainActivity> {
                         text = resources.getString(R.string.clear_all)
                         onClick {
                             notesAdapter.clear()
-                            owner.setNotesToPrefs(emptyList())
                         }
                     }.lparams(weight = 1F)
                     button {
@@ -99,9 +106,13 @@ class MainView : AnkoComponent<MainActivity> {
                             val enteredText = inputEditText.text.toString()
                             if (enteredText.isNotBlank()) {
                                 inputEditText.setText("")
-                                notesAdapter.add(TextListItem(enteredText))
-                                val noteItemList = owner.getNoteItemList().toMutableList()
-                                noteItemList.add(TextListItem(enteredText))
+                                val noteEntity = NoteEntity(enteredText)
+                                // update view
+                                notesAdapter.list.add(noteEntity)
+                                notesAdapter.notifyDataSetChanged()
+                                // add to storage
+                                val noteItemList = owner.getNoteItemList()
+                                noteItemList.add(noteEntity)
                                 owner.setNotesToPrefs(noteItemList)
                             }
                         }
@@ -119,12 +130,3 @@ class MainView : AnkoComponent<MainActivity> {
         }
     }
 }
-
-internal class NotesAdapter(ctx: Context, items: List<ListItem>) : ListItemAdapter(ctx, items) {
-    // All ListItem implementations
-    override val listItemClasses = listOf(TextListItem::class.java)
-}
-
-// Default implementation
-// DSL preview plugin requires AnkoComponent inheritors to have an empty constructor
-internal class NoteItem(text: String = "") : TextListItem(text)

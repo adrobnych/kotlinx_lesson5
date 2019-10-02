@@ -4,4 +4,6 @@
     <string name="notes">Notes</string>
     <string name="save">Save</string>
     <string name="clear_all">Clear All</string>
+    <string name="enter_note">Enter note</string>
+    <string name="filter">Filter</string>
 </resources>
